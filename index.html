@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UjianKu - SMP Islam Ar-Ridho</title>
+    
+    <script>
+        (() => {
+            const manifestJSON = {
+                "name": "UjianKu Ar-Ridho",
+                "short_name": "UjianKu",
+                "start_url": ".",
+                "display": "standalone",
+                "background_color": "#ffffff",
+                "theme_color": "#764ba2",
+                "icons": [{
+                    "src": "https://placehold.co/512x512/764ba2/ffffff?text=U",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }]
+            };
+            const manifestURI = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestJSON));
+            const manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            manifestLink.href = manifestURI;
+            document.head.appendChild(manifestLink);
+        })();
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            margin: 0;
+            color: #1f2937;
+        }
+
+        .glass { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); }
+        .glass-dark { background: rgba(255, 255, 255, 0.93); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.8); }
+        .glass-input { background: rgba(255, 255, 255, 0.5); border: 1px solid rgba(255, 255, 255, 0.6); transition: all 0.3s ease; }
+        .glass-input:focus { background: rgba(255, 255, 255, 0.95); border-color: #764ba2; outline: none; box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.3); }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.5); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.8); }
+
+        .page-transition { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 12px 20px; border-radius: 8px; color: white; font-weight: 500; animation: slideIn 0.3s ease forwards, fadeOut 0.3s ease 2.7s forwards; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .toast-success { background: #10b981; }
+        .toast-error { background: #ef4444; }
+        .toast-info { background: #3b82f6; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        .loader { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid #764ba2; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+    <div id="custom-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 hidden">
+        <div class="glass-dark w-full max-w-md rounded-2xl p-6 shadow-2xl text-center">
+            <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-2">Konfirmasi</h3>
+            <p id="modal-desc" class="text-gray-600 mb-6 text-sm">Apakah Anda yakin?</p>
+            <div class="flex gap-3">
+                <button id="modal-btn-cancel" class="flex-1 bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl hover:bg-gray-300 transition">Batal</button>
+                <button id="modal-btn-ok" class="flex-1 bg-purple-600 text-white font-bold py-2.5 rounded-xl hover:bg-purple-700 transition">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app" class="w-full min-h-screen relative overflow-hidden"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =========================================================================
+        // KONFIGURASI FIREBASE ANDA (LIVE MODE)
+        // =========================================================================
+        const IS_PREVIEW = false; 
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBj6Hmyk3AZflBwO0xxB8SzPZ6pgt56hlw",
+            authDomain: "ujian-pkn-8.firebaseapp.com",
+            projectId: "ujian-pkn-8",
+            storageBucket: "ujian-pkn-8.firebasestorage.app",
+            messagingSenderId: "809820119435",
+            appId: "1:809820119435:web:e3ae4ef17f6f9032514f8e"
+        };
+
+        // App State
+        let app = null, auth = null, db = null;
+        let currentUser = null; 
+        let currentView = 'login';
+        let soalData = [];
+        let jawabanSiswa = {};
+        let currentQuestionIndex = 0;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) {
+            console.error("Firebase init error:", error);
+        }
+
+        window.showToast = (msg, type = 'info') => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => { if(toast.parentNode) toast.remove(); }, 3000);
+        };
+
+        window.showCustomModal = (title, desc, onOk) => {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-desc').innerText = desc;
+            modal.classList.remove('hidden');
+
+            const btnOk = document.getElementById('modal-btn-ok');
+            const btnCancel = document.getElementById('modal-btn-cancel');
+
+            const clean = () => {
+                modal.classList.add('hidden');
+                btnOk.replaceWith(btnOk.cloneNode(true));
+                btnCancel.replaceWith(btnCancel.cloneNode(true));
+            };
+
+            document.getElementById('modal-btn-ok').onclick = () => { clean(); onOk(); };
+            document.getElementById('modal-btn-cancel').onclick = () => { clean(); };
+        };
+
+        window.renderView = (viewName) => {
+            currentView = viewName;
+            const appDiv = document.getElementById('app');
+            appDiv.innerHTML = '';
+            
+            if (viewName === 'login') appDiv.appendChild(createLoginView());
+            else if (viewName === 'siswa-dashboard') appDiv.appendChild(createSiswaDashboard());
+            else if (viewName === 'siswa-ujian') appDiv.appendChild(createSiswaUjian());
+            else if (viewName.startsWith('admin-')) appDiv.appendChild(createAdminLayout(viewName));
+        };
+
+        const rawSoalText = [
+            { t: 1, q: "Analisis makna Pancasila sebagai Dasar Negara: (1) Fundamen negara merdeka. (2) Landasan penyelenggaraan negara. (3) Aturan teknis peradilan hukum.", a: "A" },
+            { t: 1, q: "Karakteristik Pancasila sebagai Pandangan Hidup: (1) Pedoman penyelesaian masalah. (2) Acuan karakter dan etika. (3) Doktrin tanpa nilai toleransi.", a: "A" },
+            { t: 1, q: "Pancasila sebagai ideologi berfungsi bagaikan kompas: (1) Mengarahkan pada cita-cita nasional. (2) Melindungi identitas dari hedonisme. (3) Memisahkan negara dengan rakyat.", a: "A" },
+            { t: 1, q: "Peristiwa pengesahan UUD 1945 pada 18 Agustus 1945: (1) Dilaksanakan pada sidang PPKI. (2) Menghapus konsep negara kesatuan. (3) Menetapkan presiden dan wakilnya.", a: "B" },
+            { t: 1, q: "Karakteristik sifat \"luwes\" UUD NRI Tahun 1945: (1) Mengikuti perkembangan zaman. (2) Rinciannya dijabarkan melalui undang-undang. (3) Mudah dibatalkan oleh presiden.", a: "A" },
+            { t: 1, q: "Implementasi UUD 1945 sebagai alat kontrol: (1) Menguji kesesuaian aturan bawahannya. (2) Menjadi dasar judicial review MK. (3) Menekan kebebasan berpendapat publik.", a: "A" },
+            { t: 1, q: "Dampak amendemen UUD NRI Tahun 1945 (1999–2002): (1) Membatasi kekuasaan presiden. (2) Memasukkan pasal tentang HAM. (3) Mengubah Pembukaan UUD seluruhnya.", a: "A" },
+            { t: 1, q: "Kesepakatan MPR dalam amendemen UUD 1945: (1) Tidak mengubah Pembukaan UUD. (2) Menggunakan metode adendum. (3) Menghapus sistem negara kesatuan.", a: "A" },
+            { t: 1, q: "Dinamika sidang perumusan UUD (10–17 Juli 1945): (1) Pembahasan batas wilayah negara. (2) Penyerahan draf awal konstitusi. (3) Penetapan rumusan pada 18 Agustus.", a: "A" },
+            { t: 1, q: "Nilai kemanusiaan dalam pergaulan bangsa: (1) Menolak eksploitasi dan penjajahan. (2) Menjamin hak asasi warganegara. (3) Mengutamakan kelompok mayoritas.", a: "A" },
+            { t: 1, q: "Implementasi Persatuan pada perumusan dasar negara: (1) Kesediaan mengubah rumusan syariat. (2) Akomodasi aspirasi Indonesia Timur. (3) Penolakan terhadap sistem republik.", a: "A" },
+            { t: 1, q: "Konstitusi tidak tertulis (konvensi) di Indonesia: (1) Hukum dasar praktik ketatanegaraan. (2) Pidato kenegaraan setiap 16 Agustus. (3) UUD 1945 sebagai naskah asli.", a: "A" },
+            { t: 1, q: "Peraturan Pemerintah Pengganti Undang-Undang (Perppu): (1) Dikeluarkan dalam kegentingan memaksa. (2) Setara hierarkinya dengan undang-undang. (3) Sah tanpa persetujuan pihak parlemen.", a: "A" },
+            { t: 1, q: "Pengamalan Pancasila di lingkungan pendidikan: (1) Musyawarah mufakat di rapat OSIS. (2) Menaati tata tertib tanpa paksaan. (3) Toleransi untuk kalangan terbatas.", a: "A" },
+            { t: 1, q: "Panitia yang merumuskan dan menyiapkan kemerdekaan: (1) Panitia Hukum Dasar dipimpin Ir. Sukarno. (2) Panitia Kecil diketuai Prof. Dr. Soepomo. (3) Panitia Sembilan dibentuk Marsekal Terauchi.", a: "B" },
+
+            { t: 2, q: "Analogi fondasi bagi sebuah gedung menggambarkan kedudukan Pancasila sebagai...", o: ["Ideologi nasional", "Pandangan hidup", "Dasar negara", "Konstitusi tertulis"], a: "C" },
+            { t: 2, q: "Nilai yang meredam perdebatan mengenai rumusan Piagam Jakarta adalah...", o: ["Ketuhanan", "Kemanusiaan", "Persatuan", "Keadilan"], a: "C" },
+            { t: 2, q: "Mencegah tren hidup mewah (flexing) adalah wujud implementasi Pancasila sebagai...", o: ["Ideologi negara", "Konvensi adat", "Hukum pidana", "Traktat bangsa"], a: "A" },
+            { t: 2, q: "UUD 1945 memiliki sifat dinamis yang sering diistilahkan sebagai...", o: ["Kaku dan mengikat", "Singkat dan luwes", "Panjang dan rinci", "Statis dan absolut"], a: "B" },
+            { t: 2, q: "Lembaga negara yang berwenang menguji UU terhadap konstitusi adalah...", o: ["Mahkamah Agung", "Komisi Yudisial", "Mahkamah Konstitusi", "Majelis Permusyawaratan"], a: "C" },
+            { t: 2, q: "Sidang bersejarah yang secara sah menetapkan UUD 1945 adalah...", o: ["Panitia Sembilan", "Sidang PPKI", "Sidang BPUPK", "Panitia Hukum Dasar"], a: "B" },
+            { t: 2, q: "MPR secara bulat sepakat untuk melarang perubahan pada bagian...", o: ["Aturan Peralihan", "Batang Tubuh", "Aturan Tambahan", "Pembukaan UUD"], a: "D" },
+            { t: 2, q: "Penggunaan metode adendum dalam amendemen bermakna...", o: ["Menulis ulang teks", "Menghapus pasal lama", "Melampirkan aturan baru", "Membekukan konstitusi"], a: "C" },
+            { t: 2, q: "Sukarno menambahkan enam anggota baru ke dalam PPKI demi...", o: ["Keterwakilan rakyat Indonesia", "Memenuhi kuota militer", "Menyenangkan pihak Sekutu", "Menghindari sistem voting"], a: "A" },
+            { t: 2, q: "Pidato kenegaraan Presiden tiap 16 Agustus merupakan contoh nyata dari...", o: ["Hukum tertulis", "Konvensi negara", "Undang-undang", "Ketetapan MPR"], a: "B" },
+            { t: 2, q: "Rancangan batang tubuh UUD versi kedua selesai dibahas pada tanggal...", o: ["13 Juli 1945", "14 Juli 1945", "15 Juli 1945", "18 Agustus 1945"], a: "A" },
+            { t: 2, q: "Panitia Kecil penyusun draf batang tubuh konstitusi diketuai oleh...", o: ["Ir. Sukarno", "Drs. Moh. Hatta", "Prof. Dr. Soepomo", "K.H. Wachid Hasjim"], a: "C" },
+            { t: 2, q: "Deklarasi Djuanda menegaskan bahwa laut antar pulau di Indonesia berfungsi sebagai...", o: ["Wilayah bebas internasional", "Zona ekonomi eksklusif", "Penghubung persatuan bangsa", "Pemisah daerah otonom"], a: "C" },
+            { t: 2, q: "Wujud nyata pengamalan UUD 1945 di lingkungan pendidikan adalah...", o: ["Menaati tata tertib", "Membayar pajak rutin", "Mengikuti pemilu serentak", "Melakukan siskamling rutin"], a: "A" },
+            { t: 2, q: "Keputusan Presiden (Keppres) dan Peraturan Presiden (Perpres) dibedakan berdasarkan...", o: ["Lembaga pembuatnya", "Jangkauan wilayahnya", "Sifat keterikatannya", "Sanksi pidananya"], a: "A" },
+            { t: 2, q: "Pemerataan kesejahteraan tanpa memonopoli kekayaan mencerminkan sila...", o: ["Pertama", "Kedua", "Ketiga", "Kelima"], a: "D" },
+            { t: 2, q: "Jepang secara resmi menjanjikan kemerdekaan Indonesia melalui pertemuan di...", o: ["Jakarta", "Hiroshima", "Dalat", "Rengasdengklok"], a: "C" },
+            { t: 2, q: "Toleransi dalam membantu siswa yang kesulitan belajar mencerminkan nilai...", o: ["Alat kontrol sosial", "Pandangan hidup bangsa", "Sumber hukum formal", "Konstitusi bernegara"], a: "B" },
+            { t: 2, q: "Fungsi pokok undang-undang di bawah naungan UUD adalah mengatur rincian secara...", o: ["Konseptual", "Filosofis", "Operasional", "Simbolis"], a: "C" },
+            { t: 2, q: "Aturan masyarakat seperti larangan membuat kegaduhan di malam hari bertujuan...", o: ["Memacu ekonomi warga", "Menjaga keharmonisan sosial", "Memperkuat militer negara", "Mengatur politik daerah"], a: "B" },
+
+            { t: 3, q: "Pancasila sebagai pandangan hidup merupakan pedoman tingkah laku yang berakar murni dari budaya lokal.", a: "A" },
+            { t: 3, q: "Sidang PPKI pada 18 Agustus 1945 secara resmi menetapkan terbentuknya BPUPK.", a: "B" },
+            { t: 3, q: "UUD NRI Tahun 1945 berfungsi vital sebagai alat kontrol bagi aturan hukum di bawahnya.", a: "A" },
+            { t: 3, q: "Paham hedonisme dapat dibenarkan oleh ideologi negara asalkan tidak menggunakan uang negara.", a: "B" },
+            { t: 3, q: "Amendemen konstitusi tahun 1999–2002 berhasil disepakati secara mutlak tanpa mengubah teks Pembukaan.", a: "A" },
+            { t: 3, q: "Sila Ketuhanan Yang Maha Esa menjadi dasar moral yang menjiwai keempat sila lainnya secara organis.", a: "A" },
+            { t: 3, q: "Pengamalan Pancasila sebagai dasar negara di ruang lingkup sekolah dapat dibuktikan secara nyata melalui kepatuhan siswa terhadap tata tertib yang berlaku.", a: "A" },
+            { t: 3, q: "Penambahan enam anggota PPKI bertujuan agar panitia kemerdekaan tersebut lebih mewakili rakyat Indonesia.", a: "A" },
+            { t: 3, q: "Konstitusi di Indonesia dirancang kaku agar tidak mudah dimodifikasi atau dibatalkan oleh undang-undang.", a: "B" },
+            { t: 3, q: "Penerapan metode adendum berarti melampirkan perubahan terbaru tanpa menghapus teks asli UUD.", a: "A" },
+            { t: 3, q: "Janji kemerdekaan Indonesia pada 24 Agustus 1945 disampaikan langsung oleh Marsekal Terauchi di Dalat.", a: "A" },
+            { t: 3, q: "Pembahasan mengenai penentuan wilayah negara dan bentuk negara secara khusus menjadi agenda utama yang diselesaikan dalam sidang BPUPK tahap pertama.", a: "B" },
+            { t: 3, q: "Tokoh Islam rela menyetujui perubahan Piagam Jakarta demi memastikan keutuhan masyarakat Indonesia Timur.", a: "A" },
+            { t: 3, q: "Weltanschauung secara harfiah merupakan pedoman tata tertib peradilan hukum internasional modern.", a: "B" },
+            { t: 3, q: "Sila Kemanusiaan menolak praktik penjajahan karena hal tersebut merendahkan harkat dan martabat manusia.", a: "A" }
+        ];
+
+        const realSiswaKls8 = [
+            {nama:"ABIYYU TAUFIQUL IHSAN",kelas:"8.1",pin:"252607001"},
+            {nama:"ADAM FATHIR AL-GHAZALI",kelas:"8.1",pin:"252607047"},
+            {nama:"AHMAD ZIDAN FIRDAUS",kelas:"8.1",pin:"252607140"},
+            {nama:"ALENKRINNA LITIVALISTHA",kelas:"8.1",pin:"252607142"},
+            {nama:"ALI YANSAH ASTAKARI",kelas:"8.1",pin:"252607143"},
+            {nama:"ALIKA FARAYA",kelas:"8.1",pin:"252607144"},
+            {nama:"ANNISA SYAFIKA",kelas:"8.1",pin:"252607009"},
+            {nama:"ARGHI SATYA ANGGARA",kelas:"8.1",pin:"252607101"},
+            {nama:"AZZAHRA RAMADANI",kelas:"8.1",pin:"252607102"},
+            {nama:"BARA ZHAFIR MUMTAZ",kelas:"8.1",pin:"252607148"},
+            {nama:"DERA RAMADHANI",kelas:"8.1",pin:"252607013"},
+            {nama:"DIANDRA ARIPUTRA NUGRAHA",kelas:"8.1",pin:"252607060"},
+            {nama:"DIARA RHEIVANIA HARDIANSYAH",kelas:"8.1",pin:"252607105"},
+            {nama:"FAKHRI GHAISAN HAFY KAMIL",kelas:"8.1",pin:"252607107"},
+            {nama:"GIAN HAWWARI NAZHAN",kelas:"8.1",pin:"252607155"},
+            {nama:"INDRA FEBRIANSYAH",kelas:"8.1",pin:"252607111"},
+            {nama:"ISMI ROHIMAH ANWAR",kelas:"8.1",pin:"252607066"},
+            {nama:"KAFIE EL AZZAM",kelas:"8.1",pin:"252607067"},
+            {nama:"KAYLA PUTRI AZAHRA",kelas:"8.1",pin:"252607022"},
+            {nama:"KEYSHA KIANDRA GHASSANI",kelas:"8.1",pin:"252607113"},
+            {nama:"KHAZANA RIDHA NAYLA",kelas:"8.1",pin:"252607159"},
+            {nama:"LIBY ALSHYAQILA RUVIYADI",kelas:"8.1",pin:"252607160"},
+            {nama:"M. AZKHA AZRIL",kelas:"8.1",pin:"252607115"},
+            {nama:"MESYA PUTRI RASYABILLA",kelas:"8.1",pin:"252607071"},
+            {nama:"MUHAMAD IRGI MUNAJAT",kelas:"8.1",pin:"252607024"},
+            {nama:"MUHAMMAD ALKAHFI WIDYO UTOMO",kelas:"8.1",pin:"252607076"},
+            {nama:"MUHAMMAD ARIFIN ILHAM",kelas:"8.1",pin:"252607121"},
+            {nama:"MUHAMMAD AZKA RAMADHAN",kelas:"8.1",pin:"252607030"},
+            {nama:"MUHAMMAD AZKHA ADITYA PRASETYO",kelas:"8.1",pin:"252607077"},
+            {nama:"MUHAMMAD FARIZ NURSYIBBAN",kelas:"8.1",pin:"252607031"},
+            {nama:"MUHAMMAD RAYHANUL FATWA IRAWA",kelas:"8.1",pin:"252607125"},
+            {nama:"NADIRA APRILLIA",kelas:"8.1",pin:"252607032"},
+            {nama:"NASYWA AINUN AFIFAH",kelas:"8.1",pin:"252607033"},
+            {nama:"NAURA LARASATI HERLAMBANG",kelas:"8.1",pin:"252607034"},
+            {nama:"NENENG NUR AFIKAH",kelas:"8.1",pin:"252607128"},
+            {nama:"RAFA RIZKI ALFATHAN",kelas:"8.1",pin:"252607172"},
+            {nama:"RAISA ZALFA ARSANDI",kelas:"8.1",pin:"252607083"},
+            {nama:"RAMDHAN KEMAS BETERQIES",kelas:"8.1",pin:"252607084"},
+            {nama:"SAKINAH EKA PUTRI BATUBARA",kelas:"8.1",pin:"252607176"},
+            {nama:"SALSA AULIA RAMADHANI",kelas:"8.1",pin:"252607041"},
+            {nama:"SALSABILA AQILAH PUTRI",kelas:"8.1",pin:"252607087"},
+            {nama:"SITI KOMALASARI",kelas:"8.1",pin:"252607178"},
+            {nama:"SITI MAS HOFIFAH AZAHIRAH AZIKIAH",kelas:"8.1",pin:"252607043"},
+            {nama:"ZAHRA MIKAYLA SYAHPUTRI",kelas:"8.1",pin:"252607091"},
+            
+            {nama:"ADILA KHAESYA PUTRY",kelas:"8.2",pin:"252607002"},
+            {nama:"AFIQAH RAISHA PUTRI SU'AD",kelas:"8.2",pin:"252607094"},
+            {nama:"AIRELL QUTRATU'AIN",kelas:"8.2",pin:"252607004"},
+            {nama:"ALANDIRA TAMA JUVTI",kelas:"8.2",pin:"252607051"},
+            {nama:"ALFIATU RAHMAH HAKIM",kelas:"8.2",pin:"252607006"},
+            {nama:"ALIFA NAUFALYN FITRIA RABBANI",kelas:"8.2",pin:"252607098"},
+            {nama:"ALMER RAZA SUTA",kelas:"8.2",pin:"252607008"},
+            {nama:"ANISA NUR MAULIDA MUSTOPA",kelas:"8.2",pin:"252607145"},
+            {nama:"ANNISAA MAULIDIA",kelas:"8.2",pin:"252607055"},
+            {nama:"ARVITA NOVIA RISTI",kelas:"8.2",pin:"252607010"},
+            {nama:"EGA APRILIA",kelas:"8.2",pin:"252607151"},
+            {nama:"ELANG MALIK ANDIKA",kelas:"8.2",pin:"252607015"},
+            {nama:"FAHIRA NISWATUL LAILA",kelas:"8.2",pin:"252607016"},
+            {nama:"FATHIN SINTIA ALI",kelas:"8.2",pin:"252607062"},
+            {nama:"FEBI AIDA DENADI",kelas:"8.2",pin:"252607108"},
+            {nama:"FELLY INDAH SAPUTRI",kelas:"8.2",pin:"252607063"},
+            {nama:"GINA AULIA",kelas:"8.2",pin:"252607064"},
+            {nama:"IMAM BUDI PRAYOGA UTOMO",kelas:"8.2",pin:"252607065"},
+            {nama:"IRDIYANA FEBRIYANTI",kelas:"8.2",pin:"252607020"},
+            {nama:"M. HAIDAR ARDAN",kelas:"8.2",pin:"252607161"},
+            {nama:"MAULANA AKBAR",kelas:"8.2",pin:"252607117"},
+            {nama:"MUHAMAD IKBAL",kelas:"8.2",pin:"252607073"},
+            {nama:"MUHAMMAD REZA",kelas:"8.2",pin:"252607027"},
+            {nama:"MUHAMAD SAYYID NAFISYAHIR",kelas:"8.2",pin:"252607119"},
+            {nama:"MUHAMMAD DAFFA AGHNA RAMAD",kelas:"8.2",pin:"252607122"},
+            {nama:"MUHAMMAD FAIZ ANNAQI",kelas:"8.2",pin:"252607123"},
+            {nama:"MUHAMMAD NAUFAL RAFA",kelas:"8.2",pin:"252607078"},
+            {nama:"NASYA ATHIFA MAULIDA",kelas:"8.2",pin:"252607127"},
+            {nama:"NURUL KHOER",kelas:"8.2",pin:"252607035"},
+            {nama:"PANDU DAFFA ADMAJA",kelas:"8.2",pin:"252607036"},
+            {nama:"RADEN ACHMAD FADLI RAMADHAN",kelas:"8.2",pin:"252607130"},
+            {nama:"RAFA ABDI SYAHPUTRA",kelas:"8.2",pin:"252607131"},
+            {nama:"RAHMAT BAGAS APANDI",kelas:"8.2",pin:"252607082"},
+            {nama:"RAMADHAN HAFIZH PUTRA",kelas:"8.2",pin:"252607132"},
+            {nama:"RANA HAURA NURUL IZZAH",kelas:"8.2",pin:"252607173"},
+            {nama:"RANI AQILA AZZAHRA",kelas:"8.2",pin:"252607039"},
+            {nama:"RIFQI SYAHRUL MUBAROK",kelas:"8.2",pin:"252607086"},
+            {nama:"SAHIL HAFIZH",kelas:"8.2",pin:"252607175"},
+            {nama:"SASKIA NUR MAULIDA",kelas:"8.2",pin:"252607177"},
+            {nama:"SILVIA RAHMAH",kelas:"8.2",pin:"252607042"},
+            {nama:"SITI FATIMAH SUPRIADI",kelas:"8.2",pin:"252607088"},
+            {nama:"SITI ZAHRA RAHMADANI",kelas:"8.2",pin:"252607044"},
+            {nama:"ZULFA ALIKHA SUSANTO",kelas:"8.2",pin:"252607092"},
+            
+            {nama:"ADINDA SALSABILA YAHYA",kelas:"8.3",pin:"252607048"},
+            {nama:"ADIS MUHAMAD HAIDAR",kelas:"8.3",pin:"252607093"},
+            {nama:"AHMAD FATHIR PRATAMA",kelas:"8.3",pin:"252607003"},
+            {nama:"AHMAD HAFISH RAMADHAN",kelas:"8.3",pin:"252607049"},
+            {nama:"AHMAD NIZAR MUHTAROM",kelas:"8.3",pin:"252607095"},
+            {nama:"AIRZAFANA ELMUGHNI PRAYOGI",kelas:"8.3",pin:"252607141"},
+            {nama:"AJENG MAULIDA",kelas:"8.3",pin:"252607050"},
+            {nama:"AKBAR AL'AWI KURNIAWAN",kelas:"8.3",pin:"252607005"},
+            {nama:"ALFITA DEWI NAFIA",kelas:"8.3",pin:"252607052"},
+            {nama:"ANDINI RAHMAWATI",kelas:"8.3",pin:"252607099"},
+            {nama:"AQILAH NUR LAILATUL ZASKIYAH",kelas:"8.3",pin:"252607146"},
+            {nama:"ASTI WINDA MARIAM BAEDOWI",kelas:"8.3",pin:"252607056"},
+            {nama:"AZZAM KHAIRUL MUFLIHIN",kelas:"8.3",pin:"252607011"},
+            {nama:"BARIQ AL FAIZ",kelas:"8.3",pin:"252607103"},
+            {nama:"CLARA SUCI RAMADHANI",kelas:"8.3",pin:"252607057"},
+            {nama:"DAVINA RAHMA MULYADI",kelas:"8.3",pin:"252607150"},
+            {nama:"DESTA NUGI SETIAWAN",kelas:"8.3",pin:"252607058"},
+            {nama:"EL ALGHIFARI",kelas:"8.3",pin:"252607152"},
+            {nama:"FEBRIANA PUTRI PERMANA",kelas:"8.3",pin:"252607153"},
+            {nama:"FEBRIANI PUTRI PERMANA",kelas:"8.3",pin:"252607017"},
+            {nama:"FIRDA AULIA",kelas:"8.3",pin:"252607109"},
+            {nama:"FRICILLA RAHMALIA PUTRI",kelas:"8.3",pin:"252607154"},
+            {nama:"HABIBIE AZZAMY",kelas:"8.3",pin:"252607156"},
+            {nama:"HANA AQILA HUMAIRA",kelas:"8.3",pin:"252607110"},
+            {nama:"JASMINE FAIHA SOFYAN",kelas:"8.3",pin:"252607112"},
+            {nama:"JULIAN ALDRIANSYAH",kelas:"8.3",pin:"252607021"},
+            {nama:"KHOIRUNNISA AZZAHRA",kelas:"8.3",pin:"252607023"},
+            {nama:"MUHAMAD ADRIAN AL FAIRUS",kelas:"8.3",pin:"252607025"},
+            {nama:"MUHAMAD ESA AL RAVA",kelas:"8.3",pin:"252607072"},
+            {nama:"MUHAMAD NABIL ALFIANSYAH",kelas:"8.3",pin:"252607026"},
+            {nama:"MUHAMAD SATRIA",kelas:"8.3",pin:"252607074"},
+            {nama:"MUHAMADANIL BAQI BILLAH",kelas:"8.3",pin:"252607028"},
+            {nama:"MUHAMMAD ALIF NOPRIANSYAH",kelas:"8.3",pin:"252607029"},
+            {nama:"MUHAMMAD IRSYAD",kelas:"8.3",pin:"252607124"},
+            {nama:"MUTIARA AULIYANI",kelas:"8.3",pin:"252607126"},
+            {nama:"NABILA NURHOLIFAH",kelas:"8.3",pin:"252607168"},
+            {nama:"NESYA RIZKYNA PRISTIANURI",kelas:"8.3",pin:"252607169"},
+            {nama:"OMAR ABDUL FATAH",kelas:"8.3",pin:"252607170"},
+            {nama:"QAIREEN FAEYZA ZAHRAN",kelas:"8.3",pin:"252607129"},
+            {nama:"RAGHIL FAUJAN",kelas:"8.3",pin:"252607037"},
+            {nama:"RAISA ASKANA SAKHI",kelas:"8.3",pin:"252607038"},
+            {nama:"REISYA FAUZIAH",kelas:"8.3",pin:"252607133"},
+            {nama:"RIZKI MAULANA",kelas:"8.3",pin:"252607134"},
+            {nama:"SITI AZQIA ZAHRA",kelas:"8.3",pin:"262708180"},
+            {nama:"SITI HAZQYATUJAZILAH",kelas:"8.3",pin:"252607136"},
+            
+            {nama:"AHMAD ARFFA RAMADHAN",kelas:"8.4",pin:"252607139"},
+            {nama:"AKIFA NAILA RAMADHANI",kelas:"8.4",pin:"252607096"},
+            {nama:"ALDO HERIAWAN",kelas:"8.4",pin:"252607097"},
+            {nama:"ALIN ANANDA WIJAYA",kelas:"8.4",pin:"252607007"},
+            {nama:"ALVI NANDA PUTRA",kelas:"8.4",pin:"252607053"},
+            {nama:"AMIRA PUTRI",kelas:"8.4",pin:"252607054"},
+            {nama:"AQILA PUTRI ROBBIYATUL HIKMAH",kelas:"8.4",pin:"252607100"},
+            {nama:"AZKA MIZA RAYSAN",kelas:"8.4",pin:"252607147"},
+            {nama:"CINTA SHIDQIA",kelas:"8.4",pin:"252607012"},
+            {nama:"CLASSIKA MEDINAH GUMELAR",kelas:"8.4",pin:"252607104"},
+            {nama:"DEVINZA ARRASYA",kelas:"8.4",pin:"252607014"},
+            {nama:"DEWI PURMITASARI",kelas:"8.4",pin:"252607059"},
+            {nama:"DWIYAN ALDO SUSANTO",kelas:"8.4",pin:"252607106"},
+            {nama:"FABIAN NAUFAL GIBRAN",kelas:"8.4",pin:"252607061"},
+            {nama:"GAYDA NAYURA GASSANIA",kelas:"8.4",pin:"252607018"},
+            {nama:"HASNA AULIA SANTIKA",kelas:"8.4",pin:"252607157"},
+            {nama:"IQBAL RAMADHAN",kelas:"8.4",pin:"252607019"},
+            {nama:"KANAYA APRILIA AZZAHRA",kelas:"8.4",pin:"252607158"},
+            {nama:"KEYSHA HASNA BURHANUDIN",kelas:"8.4",pin:"252607068"},
+            {nama:"KINARA ARSYA ARUNA",kelas:"8.4",pin:"252607114"},
+            {nama:"MARWAH SAFITRI",kelas:"8.4",pin:"252607116"},
+            {nama:"MUHAMAD ABDUL ROSYID",kelas:"8.4",pin:"252607162"},
+            {nama:"MUHAMAD HAFIZ SABIHISMA",kelas:"8.4",pin:"252607163"},
+            {nama:"MUHAMAD HAIKAL NUR ISKANDAR",kelas:"8.4",pin:"252607164"},
+            {nama:"MUHAMAD VALENTINO RAMADHAN",kelas:"8.4",pin:"252607165"},
+            {nama:"MUHAMMAD ABIDZAR ALFAALIH TAIHUTTU",kelas:"8.4",pin:"252607075"},
+            {nama:"MUHAMMAD ADJI PUTRA",kelas:"8.4",pin:"252607120"},
+            {nama:"MUHAMMAD AZKA BUDIMAN",kelas:"8.4",pin:"252607166"},
+            {nama:"MUHAMMAD FAKHRI BACHRAIN",kelas:"8.4",pin:"252607167"},
+            {nama:"MUHAMMAD QOYYIMA ILHAM",kelas:"8.4",pin:"252607118"},
+            {nama:"MUHAMMAD RIZKI HAFIDZ",kelas:"8.4",pin:"252607070"},
+            {nama:"NAJWA DZAKIYA ASSYIFA",kelas:"8.4",pin:"252607079"},
+            {nama:"NAYRA PUTRI RAHAYU",kelas:"8.4",pin:"252607080"},
+            {nama:"PUTRI SEPTIANI ALFIANA SALIM",kelas:"8.4",pin:"252607081"},
+            {nama:"QOORY SYAHLA QHANITA",kelas:"8.4",pin:"252607171"},
+            {nama:"RATIH ARISTA DALIMUNTE",kelas:"8.4",pin:"252607085"},
+            {nama:"REFAN AZHARI",kelas:"8.4",pin:"252607174"},
+            {nama:"REVANDYA AKMAL KHAIRAN",kelas:"8.4",pin:"252607040"},
+            {nama:"SITI NAILA FITRIYANI",kelas:"8.4",pin:"252607089"},
+            {nama:"SITI NURAINI",kelas:"8.4",pin:"252607137"},
+            {nama:"SITI SOPIATUL ATKIYA",kelas:"8.4",pin:"252607179"},
+            {nama:"SYAVINKA AAIDA RAMADHANI",kelas:"8.4",pin:"252607090"},
+            {nama:"TARAKA FIRJATULLAH",kelas:"8.4",pin:"252607045"},
+            {nama:"VIALSA RAMADHANI",kelas:"8.4",pin:"252607138"},
+            {nama:"ZAKI SALIM LUQMANUL HAKIM",kelas:"8.4",pin:"252607046"}
+        ];
+
+        // Otomatis tentukan L/P dan NISN
+        realSiswaKls8.forEach((s) => {
+            const isP = /(PUTRI|SITI|ZAHRA|AULIA|NISA|AYU|RAMADHANI|SYAFIKA|NAYLA|AZAHRA|AQILA|AMIRA|CINTA|DEWI)/i.test(s.nama);
+            s.jk = isP ? 'P' : 'L';
+            s.nis = s.pin;
+            s.nisn = "008" + String(Math.floor(1000000 + Math.random() * 9000000));
+        });
+
+        window.autoSetupDatabase = async () => {
+            if (IS_PREVIEW || !db) return;
+            try {
+                const soalSnap = await getDocs(collection(db, "soal"));
+                if (soalSnap.empty) {
+                    for (let i = 0; i < rawSoalText.length; i++) {
+                        const item = rawSoalText[i];
+                        let opsi = [];
+                        if(item.t === 1) opsi = ["Jika (1) dan (2) benar", "Jika (1) dan (3) benar", "Jika (2) dan (3) benar", "Jika (1), (2), dan (3) benar"];
+                        else if(item.t === 3) opsi = ["Benar", "Salah"];
+                        else opsi = item.o;
+                        
+                        await addDoc(collection(db, "soal"), {
+                            no: i + 1,
+                            teks: item.q,
+                            tipe: item.t,
+                            opsi: opsi,
+                            jawaban: item.a,
+                            timestamp: serverTimestamp()
+                        });
+                    }
+                }
+                const siswaSnap = await getDocs(collection(db, "siswa"));
+                if (siswaSnap.empty) {
+                    for(let s of realSiswaKls8) {
+                        await addDoc(collection(db, "siswa"), s);
+                    }
+                }
+            } catch (error) {
+                console.error("Auto setup error:", error);
+            }
+        };
+
+        const loadSiswaOptions = async (kelas) => {
+            if(IS_PREVIEW) {
+                return realSiswaKls8.filter(s => s.kelas === kelas).map(s => ({id: s.nama, ...s}));
+            }
+            const q = query(collection(db, "siswa"), where("kelas", "==", kelas));
+            const snap = await getDocs(q);
+            let res = [];
+            snap.forEach(doc => res.push({id: doc.id, ...doc.data()}));
+            return res.sort((a,b) => a.nama.localeCompare(b.nama));
+        };
+
+        const fetchAllSoal = async () => {
+            if(IS_PREVIEW) {
+                return rawSoalText.map((item, idx) => {
+                    let opsi = [];
+                    if(item.t === 1) opsi = ["Jika (1) dan (2) benar", "Jika (1) dan (3) benar", "Jika (2) dan (3) benar", "Jika (1), (2), dan (3) benar"];
+                    else if(item.t === 3) opsi = ["Benar", "Salah"];
+                    else opsi = item.o;
+                    return { id: `dummy${idx}`, no: idx+1, teks: item.q, tipe: item.t, opsi: opsi, jawaban: item.a };
+                });
+            }
+            const q = query(collection(db, "soal"), orderBy("no", "asc"));
+            const snap = await getDocs(q);
+            let res = [];
+            snap.forEach(doc => res.push({id: doc.id, ...doc.data()}));
+            return res;
+        };
+
+        window.handleLoginSiswa = async (e) => {
+            e.preventDefault();
+            const kelas = document.getElementById('siswa-kelas').value;
+            const nama = document.getElementById('siswa-nama').value;
+            
+            if(!kelas || !nama) return showToast('Harap pilih kelas dan nama Anda!', 'error');
+
+            if (IS_PREVIEW) {
+                const found = realSiswaKls8.find(s => s.nama === nama);
+                if(found) {
+                    currentUser = { role: 'siswa', data: {id: nama, nama: found.nama, kelas: found.kelas, nis: found.nis, nisn: found.nisn, jk: found.jk} };
+                    showToast(`Selamat datang ${found.nama}!`, 'success');
+                    renderView('siswa-dashboard');
+                } else {
+                    showToast('Siswa tidak ditemukan!', 'error');
+                }
+                return;
+            }
+
+            try {
+                const snap = await getDocs(query(collection(db, "siswa"), where("kelas", "==", kelas)));
+                let foundData = null;
+                snap.forEach(d => { if(d.id === nama || d.data().nama === nama) foundData = d.data(); });
+                
+                if (foundData) {
+                    currentUser = { role: 'siswa', data: {id: nama, nama: foundData.nama, kelas: foundData.kelas, nis: foundData.nis, nisn: foundData.nisn, jk: foundData.jk} };
+                    showToast(`Selamat datang, ${foundData.nama}!`, 'success');
+                    renderView('siswa-dashboard');
+                } else {
+                    showToast('Data siswa tidak ditemukan!', 'error');
+                }
+            } catch (e) { showToast('Gagal terhubung: ' + e.message, 'error'); }
+        };
+
+        window.handleLoginGuru = async (e) => {
+            e.preventDefault();
+            const pin = document.getElementById('guru-pin').value;
+            
+            if(pin === '202099') {
+                currentUser = { role: 'admin', data: {email: 'Admin'} };
+                showToast('Berhasil masuk sebagai Admin', 'success');
+                renderView('admin-beranda');
+            } else {
+                showToast('PIN Guru Salah!', 'error');
+            }
+        };
+
+        window.logout = async () => {
+            if(!IS_PREVIEW && auth) await signOut(auth);
+            currentUser = null;
+            renderView('login');
+        };
+
+        const createLoginView = () => {
+            const div = document.createElement('div');
+            div.className = 'flex flex-col items-center justify-center min-h-screen p-4 page-transition';
+            div.innerHTML = `
+                <div class="glass-dark w-full max-w-md rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-400 to-purple-500"></div>
+                    <div class="text-center mb-8 mt-2">
+                        <i class="ph-duotone ph-student text-5xl text-purple-600 mb-2"></i>
+                        <h1 class="text-2xl font-bold text-gray-800">UjianKu PKN</h1>
+                        <p class="text-gray-500 text-sm">SMP Islam Ar-Ridho</p>
+                    </div>
+
+                    <div class="flex bg-gray-100 rounded-lg p-1 mb-6">
+                        <button onclick="document.getElementById('form-siswa').classList.remove('hidden'); document.getElementById('form-guru').classList.add('hidden'); this.classList.add('bg-white', 'shadow'); this.nextElementSibling.classList.remove('bg-white', 'shadow');" class="flex-1 py-2 rounded-md font-semibold text-sm bg-white shadow transition">Siswa</button>
+                        <button onclick="document.getElementById('form-guru').classList.remove('hidden'); document.getElementById('form-siswa').classList.add('hidden'); this.classList.add('bg-white', 'shadow'); this.previousElementSibling.classList.remove('bg-white', 'shadow');" class="flex-1 py-2 rounded-md font-semibold text-sm text-gray-600 transition">Guru</button>
+                    </div>
+
+                    <!-- Siswa Form -->
+                    <form id="form-siswa" onsubmit="handleLoginSiswa(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Pilih Kelas</label>
+                            <select id="siswa-kelas" onchange="updateNamaSiswa(this.value)" class="w-full glass-input px-4 py-2.5 rounded-lg text-gray-700 font-medium" required>
+                                <option value="">-- Pilih Kelas --</option>
+                                <option value="8.1">Kelas 8.1</option>
+                                <option value="8.2">Kelas 8.2</option>
+                                <option value="8.3">Kelas 8.3</option>
+                                <option value="8.4">Kelas 8.4</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Pilih Nama Anda</label>
+                            <select id="siswa-nama" class="w-full glass-input px-4 py-2.5 rounded-lg text-gray-700 font-medium disabled:opacity-50" required disabled>
+                                <option value="">-- Pilih Kelas Dahulu --</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-3.5 rounded-xl mt-4 hover:shadow-lg transform transition hover:-translate-y-0.5">Mulai Ujian</button>
+                    </form>
+
+                    <!-- Guru Form -->
+                    <form id="form-guru" onsubmit="handleLoginGuru(event)" class="space-y-4 hidden">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">PIN Guru</label>
+                            <input type="password" id="guru-pin" class="w-full glass-input px-4 py-2.5 rounded-lg text-gray-700 font-bold tracking-widest text-center text-lg" placeholder="••••••" required>
+                        </div>
+                        <button type="submit" class="w-full bg-gradient-to-r from-gray-800 to-gray-900 text-white font-bold py-3.5 rounded-xl mt-4 hover:shadow-lg transform transition hover:-translate-y-0.5">Masuk Dashboard</button>
+                    </form>
+                </div>
+            `;
+            return div;
+        };
+
+        window.updateNamaSiswa = async (kelas) => {
+            const select = document.getElementById('siswa-nama');
+            select.innerHTML = '<option value="">Memuat data...</option>';
+            select.disabled = true;
+            if(!kelas) { select.innerHTML = '<option value="">-- Pilih Kelas Dahulu --</option>'; return; }
+            
+            const siswa = await loadSiswaOptions(kelas);
+            select.innerHTML = '<option value="">-- Ketuk & Pilih Nama Anda --</option>';
+            siswa.forEach(s => {
+                select.innerHTML += `<option value="${s.id || s.nama}">${s.nama}</option>`;
+            });
+            select.disabled = false;
+        };
+
+        const createSiswaDashboard = () => {
+            const div = document.createElement('div');
+            div.className = 'flex flex-col items-center justify-center min-h-screen p-4 page-transition';
+            div.innerHTML = `
+                <div class="glass-dark w-full max-w-md rounded-2xl p-8 shadow-2xl text-center relative overflow-hidden">
+                    <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow">
+                        <i class="ph-duotone ph-user text-4xl text-blue-600"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-1">Halo, ${currentUser.data.nama}!</h2>
+                    <p class="text-gray-500 font-semibold mb-6">Siswa Kelas ${currentUser.data.kelas}</p>
+                    
+                    <div class="bg-purple-50 rounded-xl p-4 mb-6 border border-purple-100 text-left">
+                        <h3 class="font-bold text-purple-800 mb-3 flex items-center gap-2"><i class="ph-fill ph-info"></i> Petunjuk Pengerjaan</h3>
+                        <ul class="text-sm text-purple-700 space-y-2 font-medium">
+                            <li class="flex items-center gap-2"><i class="ph-bold ph-book-bookmark"></i> Pendidikan Pancasila (Bab 1 & 2)</li>
+                            <li class="flex items-center gap-2"><i class="ph-bold ph-list-numbers"></i> Total 50 Soal (Pilihan Ganda & Benar/Salah)</li>
+                            <li class="flex items-center gap-2"><i class="ph-bold ph-arrow-left-right"></i> Soal tampil satu per satu. Anda bisa menekan tombol Kembali kapan saja untuk memeriksa jawaban.</li>
+                        </ul>
+                    </div>
+                    
+                    <button onclick="mulaiUjian()" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg transform transition hover:-translate-y-1 text-lg">Mulai Kerjakan Soal</button>
+                    <button onclick="logout()" class="w-full mt-3 bg-white border-2 border-gray-200 text-gray-500 font-bold py-3 rounded-xl hover:bg-gray-50 transition">Ganti Akun</button>
+                </div>
+            `;
+            return div;
+        };
+
+        window.mulaiUjian = async () => {
+            const btn = document.querySelector('button');
+            btn.innerHTML = '<div class="loader mx-auto"></div>';
+            soalData = await fetchAllSoal();
+            jawabanSiswa = {};
+            currentQuestionIndex = 0;
+            renderView('siswa-ujian');
+        };
+
+        const createSiswaUjian = () => {
+            const div = document.createElement('div');
+            div.className = 'w-full max-w-2xl mx-auto p-3 sm:p-6 pb-28 page-transition min-h-screen flex flex-col justify-center';
+            
+            const totalSoal = soalData.length;
+            const soal = soalData[currentQuestionIndex];
+            const currentAns = jawabanSiswa[soal.id] || '';
+            const progressPercent = Math.round(((currentQuestionIndex + 1) / totalSoal) * 100);
+
+            let opsiHtml = '';
+            const labels = ['A', 'B', 'C', 'D'];
+            
+            soal.opsi.forEach((opt, oIdx) => {
+                const label = soal.tipe === 3 ? opt : labels[oIdx];
+                const isSelected = currentAns === label;
+                opsiHtml += `
+                    <label class="flex items-start p-4 sm:p-5 border-2 ${isSelected ? 'border-purple-600 bg-purple-50/80 shadow-sm' : 'border-gray-200 bg-white/70 hover:bg-purple-50/40'} rounded-2xl cursor-pointer transition group">
+                        <input type="radio" name="soal-aktif" value="${label}" ${isSelected ? 'checked' : ''} onchange="pilihOpsi('${soal.id}', '${label}')" class="mt-1 w-5 h-5 text-purple-600 focus:ring-purple-500">
+                        <span class="ml-3 text-base sm:text-lg text-gray-800 font-medium group-hover:text-purple-900"><strong class="mr-2 text-purple-700">${label}.</strong> ${opt}</span>
+                    </label>
+                `;
+            });
+
+            let badge = soal.tipe === 1 ? 'Tipe 1: Asosiasi Logika' : (soal.tipe === 3 ? 'Tipe 3: Benar / Salah' : 'Tipe 2: Pilihan Ganda');
+
+            div.innerHTML = `
+                <!-- Progress Header -->
+                <div class="glass-dark rounded-2xl p-4 sm:p-5 mb-6 shadow-xl border border-gray-200">
+                    <div class="flex justify-between items-center mb-3">
+                        <div>
+                            <span class="text-xs font-bold bg-purple-600 text-white px-3 py-1 rounded-full shadow">Soal ${currentQuestionIndex + 1} dari ${totalSoal}</span>
+                            <span class="text-xs text-gray-500 font-semibold ml-2">${badge}</span>
+                        </div>
+                        <span class="text-sm font-black text-purple-700">${progressPercent}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                        <div class="bg-gradient-to-r from-purple-600 to-blue-600 h-2.5 transition-all duration-300" style="width: ${progressPercent}%"></div>
+                    </div>
+                </div>
+
+                <!-- Question Card -->
+                <div class="glass-dark rounded-2xl p-6 sm:p-8 shadow-2xl border border-gray-200 mb-6">
+                    <p class="text-gray-900 text-lg sm:text-xl font-semibold mb-6 leading-relaxed">${soal.teks}</p>
+                    <div class="space-y-3.5">
+                        ${opsiHtml}
+                    </div>
+                </div>
+
+                <!-- Navigation Controls -->
+                <div class="flex justify-between items-center gap-4">
+                    <button onclick="navSoal(-1)" ${currentQuestionIndex === 0 ? 'disabled' : ''} class="flex-1 bg-white border-2 border-gray-200 text-gray-700 font-bold py-3.5 px-6 rounded-2xl shadow hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"><i class="ph-bold ph-arrow-left text-lg"></i> Kembali</button>
+                    
+                    ${currentQuestionIndex < totalSoal - 1 ? 
+                        `<button onclick="navSoal(1)" class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2">Lanjut <i class="ph-bold ph-arrow-right text-lg"></i></button>` :
+                        `<button onclick="konfirmasiKirim()" class="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-xl hover:shadow-2xl transition flex items-center justify-center gap-2"><i class="ph-bold ph-paper-plane-right text-lg"></i> Selesai & Kirim</button>`
+                    }
+                </div>
+            `;
+            return div;
+        };
+
+        window.pilihOpsi = (id, ans) => {
+            jawabanSiswa[id] = ans;
+        };
+
+        window.navSoal = (dir) => {
+            currentQuestionIndex += dir;
+            if(currentQuestionIndex < 0) currentQuestionIndex = 0;
+            if(currentQuestionIndex >= soalData.length) currentQuestionIndex = soalData.length - 1;
+            
+            const appDiv = document.getElementById('app');
+            appDiv.innerHTML = '';
+            appDiv.appendChild(createSiswaUjian());
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        };
+
+        window.konfirmasiKirim = () => {
+            const terjawab = Object.keys(jawabanSiswa).length;
+            const sisa = soalData.length - terjawab;
+            let msg = sisa > 0 ? `Masih ada ${sisa} soal yang belum Anda jawab. Yakin ingin mengirimkan jawaban sekarang?` : "Semua soal sudah dijawab. Kirim jawaban sekarang? Data tidak dapat diubah setelah dikirim.";
+            
+            showCustomModal("Konfirmasi Pengiriman", msg, () => {
+                prosesKirimJawaban();
+            });
+        };
+
+        window.prosesKirimJawaban = async () => {
+            let benar = 0;
+            soalData.forEach(s => {
+                if(jawabanSiswa[s.id] === s.jawaban) benar++;
+            });
+            const skor = Math.round((benar / soalData.length) * 100);
+
+            try {
+                showToast('Mengirim jawaban ke server...', 'info');
+                await addDoc(collection(db, "hasil_ujian"), {
+                    id_siswa: currentUser.data.id || currentUser.data.nama,
+                    nama_siswa: currentUser.data.nama,
+                    kelas: currentUser.data.kelas,
+                    nis: currentUser.data.nis || '-',
+                    nisn: currentUser.data.nisn || '-',
+                    jk: currentUser.data.jk || '-',
+                    skor_akhir: skor,
+                    benar: benar,
+                    total: soalData.length,
+                    waktu_pengerjaan: serverTimestamp()
+                });
+                tampilkanHalamanSelesai(skor, benar, soalData.length);
+            } catch(e) { 
+                showToast('Gagal mengirim: ' + e.message, 'error'); 
+            }
+        };
+
+        window.tampilkanHalamanSelesai = (skor, benar, total) => {
+            const appDiv = document.getElementById('app');
+            appDiv.className = 'flex flex-col items-center justify-center min-h-screen p-4 page-transition';
+            appDiv.innerHTML = `
+                <div class="glass-dark w-full max-w-md rounded-3xl p-8 shadow-2xl text-center relative overflow-hidden">
+                    <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-white shadow-md animate-bounce">
+                        <i class="ph-fill ph-check-circle text-6xl text-green-600"></i>
+                    </div>
+                    <h2 class="text-3xl font-extrabold text-gray-800 mb-2">Terima Kasih!</h2>
+                    <p class="text-gray-600 font-medium mb-6">Ujian Anda telah berhasil dikirim dan tercatat di sistem guru.</p>
+                    
+                    <div class="bg-purple-50/80 rounded-2xl p-5 mb-6 border border-purple-100">
+                        <p class="text-xs uppercase font-bold tracking-wider text-purple-500 mb-1">Hasil Perolehan Nilai</p>
+                        <h3 class="text-5xl font-black text-purple-700">${skor}</h3>
+                        <p class="text-sm text-gray-500 mt-2">Jawaban Benar: <strong class="text-gray-700">${benar}</strong> dari ${total} soal</p>
+                    </div>
+
+                    <button onclick="logout()" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg transform transition hover:scale-[1.02]">Keluar / Selesai</button>
+                </div>
+            `;
+        };
+
+        const createAdminLayout = (activeMenu) => {
+            const div = document.createElement('div');
+            div.className = 'flex h-screen bg-gray-50 font-sans overflow-hidden page-transition';
+            
+            const sidebar = `
+                <div class="hidden md:flex flex-col w-64 glass-dark border-r border-gray-200">
+                    <div class="p-6 border-b border-gray-200 flex items-center gap-3">
+                        <i class="ph-duotone ph-shield-check text-3xl text-purple-600"></i>
+                        <h1 class="font-bold text-xl text-gray-800">AdminPanel</h1>
+                    </div>
+                    <div class="flex-1 py-4 px-3 space-y-2">
+                        <button onclick="renderView('admin-beranda')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${activeMenu==='admin-beranda' ? 'bg-purple-100 text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}"><i class="ph ph-squares-four text-xl"></i> Beranda</button>
+                        <button onclick="renderView('admin-nilai')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${activeMenu==='admin-nilai' ? 'bg-purple-100 text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}"><i class="ph ph-chart-bar text-xl"></i> Rekap Nilai</button>
+                        <button onclick="renderView('admin-siswa')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${activeMenu==='admin-siswa' ? 'bg-purple-100 text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}"><i class="ph ph-users text-xl"></i> Kelola Siswa</button>
+                        <button onclick="renderView('admin-soal')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${activeMenu==='admin-soal' ? 'bg-purple-100 text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}"><i class="ph ph-exam text-xl"></i> Kelola Soal</button>
+                    </div>
+                    <div class="p-4 border-t border-gray-200">
+                        <button onclick="logout()" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg transition"><i class="ph-bold ph-sign-out text-lg"></i> Keluar</button>
+                    </div>
+                </div>
+            `;
+
+            const bottomNav = `
+                <div class="md:hidden fixed bottom-0 left-0 w-full glass-dark border-t border-gray-200 flex justify-around p-2 z-50">
+                    <button onclick="renderView('admin-beranda')" class="flex flex-col items-center p-2 ${activeMenu==='admin-beranda' ? 'text-purple-600' : 'text-gray-500'}"><i class="ph ph-squares-four text-2xl"></i><span class="text-[10px] font-bold">Home</span></button>
+                    <button onclick="renderView('admin-nilai')" class="flex flex-col items-center p-2 ${activeMenu==='admin-nilai' ? 'text-purple-600' : 'text-gray-500'}"><i class="ph ph-chart-bar text-2xl"></i><span class="text-[10px] font-bold">Nilai</span></button>
+                    <button onclick="renderView('admin-siswa')" class="flex flex-col items-center p-2 ${activeMenu==='admin-siswa' ? 'text-purple-600' : 'text-gray-500'}"><i class="ph ph-users text-2xl"></i><span class="text-[10px] font-bold">Siswa</span></button>
+                    <button onclick="renderView('admin-soal')" class="flex flex-col items-center p-2 ${activeMenu==='admin-soal' ? 'text-purple-600' : 'text-gray-500'}"><i class="ph ph-exam text-2xl"></i><span class="text-[10px] font-bold">Soal</span></button>
+                    <button onclick="logout()" class="flex flex-col items-center p-2 text-red-500"><i class="ph ph-sign-out text-2xl"></i><span class="text-[10px] font-bold">Keluar</span></button>
+                </div>
+            `;
+
+            div.innerHTML = `
+                ${sidebar}
+                <div class="flex-1 overflow-y-auto pb-20 md:pb-0 bg-transparent hide-scrollbar relative">
+                    <div class="p-6 sm:p-10 max-w-5xl mx-auto" id="admin-content"></div>
+                </div>
+                ${bottomNav}
+            `;
+
+            setTimeout(() => {
+                const contentDiv = document.getElementById('admin-content');
+                if(activeMenu === 'admin-beranda') window.loadAdminBeranda(contentDiv);
+                else if(activeMenu === 'admin-nilai') window.loadAdminNilai(contentDiv);
+                else if(activeMenu === 'admin-siswa') window.loadAdminSiswa(contentDiv);
+                else if(activeMenu === 'admin-soal') window.loadAdminSoal(contentDiv);
+            }, 50);
+
+            return div;
+        };
+
+        window.loadAdminBeranda = async (container) => {
+            container.innerHTML = `
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Dashboard Guru</h2>
+                <p class="text-gray-500 mb-8 font-medium">Monitoring pengerjaan Ulangan Harian PKN SMP Islam Ar-Ridho.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-dark p-6 rounded-2xl shadow-sm border-l-4 border-purple-500">
+                        <div class="flex items-center justify-between">
+                            <div><p class="text-sm text-gray-500 font-semibold">Total Soal</p><h3 class="text-3xl font-bold text-gray-800 mt-1" id="stat-soal">--</h3></div>
+                            <i class="ph-duotone ph-exam text-5xl text-purple-200"></i>
+                        </div>
+                    </div>
+                    <div class="glass-dark p-6 rounded-2xl shadow-sm border-l-4 border-blue-500">
+                        <div class="flex items-center justify-between">
+                            <div><p class="text-sm text-gray-500 font-semibold">Siswa Terdaftar</p><h3 class="text-3xl font-bold text-gray-800 mt-1" id="stat-siswa">--</h3></div>
+                            <i class="ph-duotone ph-users text-5xl text-blue-200"></i>
+                        </div>
+                    </div>
+                    <div class="glass-dark p-6 rounded-2xl shadow-sm border-l-4 border-green-500">
+                        <div class="flex items-center justify-between">
+                            <div><p class="text-sm text-gray-500 font-semibold">Sudah Selesai</p><h3 class="text-3xl font-bold text-gray-800 mt-1" id="stat-nilai">--</h3></div>
+                            <i class="ph-duotone ph-check-circle text-5xl text-green-200"></i>
+                        </div>
+                    </div>
+                </div>
+            `;
+            try {
+                const [s, u, n] = await Promise.all([ getDocs(collection(db,'soal')), getDocs(collection(db,'siswa')), getDocs(collection(db,'hasil_ujian')) ]);
+                document.getElementById('stat-soal').innerText = s.size; 
+                document.getElementById('stat-siswa').innerText = u.size; 
+                document.getElementById('stat-nilai').innerText = n.size;
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
+        window.loadAdminNilai = async (container) => {
+            container.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+                    <h2 class="text-2xl font-bold text-gray-800">Rekap Nilai Siswa</h2>
+                    <div class="flex flex-wrap w-full sm:w-auto gap-2">
+                        <select id="filter-kelas-nilai" onchange="refreshTabelNilai(this.value)" class="glass-input px-3 py-2 rounded-lg text-sm font-medium text-gray-700 outline-none">
+                            <option value="SEMUA">Semua Kelas</option>
+                            <option value="8.1">Kelas 8.1</option>
+                            <option value="8.2">Kelas 8.2</option>
+                            <option value="8.3">Kelas 8.3</option>
+                            <option value="8.4">Kelas 8.4</option>
+                        </select>
+                        <button onclick="exportKeCSV()" class="flex-1 sm:flex-none justify-center text-white bg-green-600 px-4 py-2 rounded-lg font-bold shadow hover:bg-green-700 transition flex items-center gap-2"><i class="ph-bold ph-download-simple"></i> Download CSV</button>
+                        <button onclick="loadAdminNilai(document.getElementById('admin-content'))" class="text-purple-600 bg-purple-100 p-2 rounded-lg hover:bg-purple-200"><i class="ph-bold ph-arrows-clockwise text-xl"></i></button>
+                    </div>
+                </div>
+                <div class="glass-dark rounded-xl shadow-sm overflow-x-auto border border-gray-200">
+                    <table class="w-full text-left border-collapse min-w-[800px]">
+                        <thead><tr class="bg-gray-100 text-gray-600 text-sm border-b"><th class="p-4">NIS</th><th class="p-4">NISN</th><th class="p-4">Nama Siswa</th><th class="p-4 text-center">L/P</th><th class="p-4">Kelas</th><th class="p-4 text-center">Benar</th><th class="p-4 text-center">Skor Akhir</th></tr></thead>
+                        <tbody id="tbl-nilai"><tr><td colspan="7" class="p-8 text-center"><div class="loader mx-auto border-purple-600"></div></td></tr></tbody>
+                    </table>
+                </div>
+            `;
+            refreshTabelNilai('SEMUA');
+        };
+
+        window.refreshTabelNilai = async (kelasFilter = 'SEMUA') => {
+            const tbody = document.getElementById('tbl-nilai');
+            try {
+                const snap = await getDocs(collection(db, "hasil_ujian"));
+                if(snap.empty) {
+                    return tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-500 font-medium">Belum ada siswa yang mengumpulkan ujian.</td></tr>';
+                }
+                
+                let results = [];
+                snap.forEach(d => results.push(d.data()));
+                
+                if (kelasFilter !== 'SEMUA') {
+                    results = results.filter(v => v.kelas === kelasFilter);
+                }
+                results.sort((a, b) => b.skor_akhir - a.skor_akhir);
+
+                let html = '';
+                results.forEach(val => {
+                    html += `<tr class="border-b hover:bg-purple-50 transition"><td class="p-4 font-medium text-gray-600">${val.nis || '-'}</td><td class="p-4 font-medium text-gray-600">${val.nisn || '-'}</td><td class="p-4 font-bold text-gray-800">${val.nama_siswa}</td><td class="p-4 text-center font-bold text-gray-600">${val.jk || '-'}</td><td class="p-4 font-medium">${val.kelas}</td><td class="p-4 text-center text-sm font-medium text-gray-500">${val.benar} dari ${val.total}</td><td class="p-4 text-center"><span class="bg-green-100 text-green-700 font-black text-lg px-3 py-1 rounded shadow-sm border border-green-200">${val.skor_akhir}</span></td></tr>`;
+                });
+                tbody.innerHTML = html || '<tr><td colspan="7" class="p-8 text-center text-gray-500 font-medium">Tidak ada data untuk kelas ini.</td></tr>';
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-500 font-medium">Gagal memuat data: ${error.message}</td></tr>`;
+            }
+        };
+
+        window.exportKeCSV = async () => {
+            try {
+                showToast('Menyiapkan file Excel (CSV)...', 'info');
+                const snap = await getDocs(collection(db, "hasil_ujian"));
+                
+                if(snap.empty) return showToast('Belum ada data ujian yang masuk.', 'error');
+
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "NIS,NISN,Nama Siswa,L/P,Kelas,Benar,Total Soal,Skor Akhir\r\n";
+
+                snap.forEach(doc => {
+                    const v = doc.data();
+                    const namaClean = v.nama_siswa ? v.nama_siswa.replace(/,/g, "") : "";
+                    csvContent += `${v.nis || '-'},${v.nisn || '-' },${namaClean},${v.jk || '-'},${v.kelas},${v.benar},${v.total},${v.skor_akhir}\r\n`;
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "Rekap_Nilai_PKN_Kelas_8.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast('Download berhasil!', 'success');
+            } catch(e) {
+                showToast('Gagal mendownload: ' + e.message, 'error');
+            }
+        };
+
+        window.loadAdminSiswa = async (container) => {
+            container.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+                    <h2 class="text-2xl font-bold text-gray-800">Kelola Data Siswa</h2>
+                    <div class="flex flex-wrap w-full sm:w-auto gap-2">
+                        <select id="filter-kelas-siswa" onchange="refreshTabelSiswa(this.value)" class="glass-input px-3 py-2 rounded-lg text-sm font-medium text-gray-700 outline-none">
+                            <option value="SEMUA">Semua Kelas</option>
+                            <option value="8.1">Kelas 8.1</option>
+                            <option value="8.2">Kelas 8.2</option>
+                            <option value="8.3">Kelas 8.3</option>
+                            <option value="8.4">Kelas 8.4</option>
+                        </select>
+                        <button onclick="loadAdminSiswa(document.getElementById('admin-content'))" class="text-purple-600 bg-purple-100 p-2 rounded-lg hover:bg-purple-200 transition"><i class="ph-bold ph-arrows-clockwise text-xl"></i></button>
+                    </div>
+                </div>
+                <div class="glass-dark rounded-xl shadow-sm overflow-x-auto border border-gray-200">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead><tr class="bg-gray-100 text-gray-600 text-sm border-b"><th class="p-4">NIS</th><th class="p-4">NISN</th><th class="p-4">Nama</th><th class="p-4 text-center">L/P</th><th class="p-4">Kelas</th></tr></thead>
+                        <tbody id="tbl-siswa"><tr><td colspan="5" class="p-8 text-center"><div class="loader mx-auto border-purple-600"></div></td></tr></tbody>
+                    </table>
+                </div>
+            `;
+            refreshTabelSiswa('SEMUA');
+        };
+
+        window.refreshTabelSiswa = async (kelasFilter = 'SEMUA') => {
+            const tbody = document.getElementById('tbl-siswa');
+            try {
+                let q = collection(db, "siswa");
+                if (kelasFilter !== 'SEMUA') q = query(q, where("kelas", "==", kelasFilter));
+                const snap = await getDocs(q);
+                
+                if(snap.empty) return tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-500 font-medium">Data siswa kosong.</td></tr>';
+                
+                let results = [];
+                snap.forEach(d => results.push(d.data()));
+                results.sort((a,b) => a.nama.localeCompare(b.nama));
+
+                let html = '';
+                results.forEach(v => {
+                    html += `<tr class="border-b hover:bg-purple-50 transition"><td class="p-4 font-medium text-gray-600">${v.nis || '-'}</td><td class="p-4 font-medium text-gray-600">${v.nisn || '-'}</td><td class="p-4 font-bold text-gray-800">${v.nama}</td><td class="p-4 text-center font-bold text-gray-600">${v.jk || '-'}</td><td class="p-4 font-medium">${v.kelas}</td></tr>`;
+                });
+                tbody.innerHTML = html;
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-500 font-medium">Gagal memuat data: ${error.message}</td></tr>`;
+            }
+        };
+
+        window.loadAdminSoal = async (container) => {
+            container.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+                    <h2 class="text-2xl font-bold text-gray-800">Bank Soal PKN</h2>
+                    <button onclick="bukaModalSoal()" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold shadow hover:bg-purple-700 transition flex items-center gap-2"><i class="ph-bold ph-plus"></i> Tambah Soal</button>
+                </div>
+                <div class="space-y-4" id="list-soal">
+                    <div class="text-center p-8"><div class="loader mx-auto border-purple-600"></div></div>
+                </div>
+
+                <!-- Modal Form Soal -->
+                <div id="modal-soal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 hidden">
+                    <div class="glass-dark w-full max-w-lg rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+                        <h3 id="modal-soal-title" class="text-xl font-bold text-gray-800 mb-4">Tambah / Edit Soal</h3>
+                        <form id="form-soal" onsubmit="simpanSoal(event)" class="space-y-4">
+                            <input type="hidden" id="soal-doc-id">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nomor Soal</label>
+                                <input type="number" id="soal-no" class="w-full glass-input px-3 py-2 rounded-lg text-gray-700 font-medium" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Tipe Soal</label>
+                                <select id="soal-tipe" onchange="toggleOpsiForm(this.value)" class="w-full glass-input px-3 py-2 rounded-lg text-gray-700 font-medium" required>
+                                    <option value="1">Tipe 1: Asosiasi Logika (1-3 benar)</option>
+                                    <option value="2">Tipe 2: Pilihan Ganda Biasa (A, B, C, D)</option>
+                                    <option value="3">Tipe 3: Benar / Salah</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Teks Pertanyaan</label>
+                                <textarea id="soal-teks" rows="3" class="w-full glass-input px-3 py-2 rounded-lg text-gray-700 font-medium" required></textarea>
+                            </div>
+                            <div id="container-opsi-pg" class="space-y-2">
+                                <label class="block text-sm font-medium text-gray-700">Pilihan Jawaban (A, B, C, D)</label>
+                                <input type="text" id="opt-a" placeholder="Opsi A" class="w-full glass-input px-3 py-2 rounded-lg text-sm text-gray-700">
+                                <input type="text" id="opt-b" placeholder="Opsi B" class="w-full glass-input px-3 py-2 rounded-lg text-sm text-gray-700">
+                                <input type="text" id="opt-c" placeholder="Opsi C" class="w-full glass-input px-3 py-2 rounded-lg text-sm text-gray-700">
+                                <input type="text" id="opt-d" placeholder="Opsi D" class="w-full glass-input px-3 py-2 rounded-lg text-sm text-gray-700">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Kunci Jawaban (Contoh: A, B, C, D)</label>
+                                <input type="text" id="soal-jawaban" class="w-full glass-input px-3 py-2 rounded-lg text-gray-700 font-bold uppercase" placeholder="A" required>
+                            </div>
+                            <div class="flex gap-3 pt-2">
+                                <button type="button" onclick="tutupModalSoal()" class="flex-1 bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl hover:bg-gray-300 transition">Batal</button>
+                                <button type="submit" class="flex-1 bg-purple-600 text-white font-bold py-2.5 rounded-xl hover:bg-purple-700 transition">Simpan Soal</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            
+            try {
+                const ls = document.getElementById('list-soal');
+                const dataSoal = await fetchAllSoal();
+                if(dataSoal.length === 0) {
+                    ls.innerHTML = '<div class="text-center p-8 text-gray-500 font-medium">Belum ada soal tersimpan.</div>';
+                    return;
+                }
+                let html = '';
+                dataSoal.forEach(s => {
+                    html += `
+                        <div class="glass-dark p-5 rounded-2xl border border-gray-200 shadow-sm transition hover:shadow-md relative group">
+                            <div class="absolute top-4 right-4 flex gap-2">
+                                <button onclick='editSoal(${JSON.stringify(s).replace(/'/g, "&#39;")})' class="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition" title="Edit Soal"><i class="ph-bold ph-pencil-simple"></i></button>
+                                <button onclick="hapusSoal('${s.id}')" class="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition" title="Hapus Soal"><i class="ph-bold ph-trash"></i></button>
+                            </div>
+                            <div class="flex items-center gap-3 mb-3 pr-24">
+                                <span class="font-bold text-sm bg-gray-800 text-white px-3 py-1 rounded-md shadow-sm">No. ${s.no}</span>
+                                <span class="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-md border border-green-200 font-bold"><i class="ph-bold ph-check"></i> Kunci: ${s.jawaban}</span>
+                                <span class="text-xs bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md font-bold">Tipe ${s.tipe}</span>
+                            </div>
+                            <p class="text-[15px] text-gray-800 mb-4 font-medium leading-relaxed">${s.teks}</p>
+                            <div class="text-sm text-gray-600 ml-4 space-y-2 border-l-2 border-purple-200 pl-4">
+                                ${s.opsi.map((o, i) => `<div class="flex items-start"><span class="font-bold mr-2">${s.tipe === 3 ? '' : ['A','B','C','D'][i] + '.'}</span> <span>${o}</span></div>`).join('')}
+                            </div>
+                        </div>`;
+                });
+                ls.innerHTML = html;
+            } catch (error) {
+                document.getElementById('list-soal').innerHTML = `<div class="text-center p-8 text-red-500 font-medium">Gagal memuat soal: ${error.message}</div>`;
+            }
+        };
+
+        window.toggleOpsiForm = (tipe) => {
+            const containerPG = document.getElementById('container-opsi-pg');
+            if(tipe == '2') containerPG.style.display = 'block';
+            else containerPG.style.display = 'none';
+        };
+
+        window.bukaModalSoal = (soal = null) => {
+            const modal = document.getElementById('modal-soal');
+            const form = document.getElementById('form-soal');
+            form.reset();
+            document.getElementById('soal-doc-id').value = '';
+            
+            if(soal) {
+                document.getElementById('modal-soal-title').innerText = 'Edit Soal No. ' + soal.no;
+                document.getElementById('soal-doc-id').value = soal.id;
+                document.getElementById('soal-no').value = soal.no;
+                document.getElementById('soal-tipe').value = soal.tipe;
+                document.getElementById('soal-teks').value = soal.teks;
+                document.getElementById('soal-jawaban').value = soal.jawaban;
+                
+                toggleOpsiForm(soal.tipe);
+                if(soal.tipe == 2 && soal.opsi) {
+                    document.getElementById('opt-a').value = soal.opsi[0] || '';
+                    document.getElementById('opt-b').value = soal.opsi[1] || '';
+                    document.getElementById('opt-c').value = soal.opsi[2] || '';
+                    document.getElementById('opt-d').value = soal.opsi[3] || '';
+                }
+            } else {
+                document.getElementById('modal-soal-title').innerText = 'Tambah Soal Baru';
+                toggleOpsiForm('1');
+            }
+            modal.classList.remove('hidden');
+        };
+
+        window.tutupModalSoal = () => {
+            document.getElementById('modal-soal').classList.add('hidden');
+        };
+
+        window.editSoal = (s) => {
+            bukaModalSoal(s);
+        };
+
+        window.simpanSoal = async (e) => {
+            e.preventDefault();
+            const docId = document.getElementById('soal-doc-id').value;
+            const no = parseInt(document.getElementById('soal-no').value);
+            const tipe = parseInt(document.getElementById('soal-tipe').value);
+            const teks = document.getElementById('soal-teks').value;
+            const jawaban = document.getElementById('soal-jawaban').value.trim().toUpperCase();
+
+            let opsi = [];
+            if(tipe === 1) {
+                opsi = ["Jika (1) dan (2) benar", "Jika (1) dan (3) benar", "Jika (2) dan (3) benar", "Jika (1), (2), dan (3) benar"];
+            } else if(tipe === 3) {
+                opsi = ["Benar", "Salah"];
+            } else {
+                opsi = [
+                    document.getElementById('opt-a').value,
+                    document.getElementById('opt-b').value,
+                    document.getElementById('opt-c').value,
+                    document.getElementById('opt-d').value
+                ];
+            }
+
+            try {
+                showToast('Menyimpan soal...', 'info');
+                if(docId) {
+                    await updateDoc(doc(db, "soal", docId), { no, tipe, teks, opsi, jawaban });
+                    showToast('Soal berhasil diperbarui!', 'success');
+                } else {
+                    await addDoc(collection(db, "soal"), { no, tipe, teks, opsi, jawaban, timestamp: serverTimestamp() });
+                    showToast('Soal baru berhasil ditambahkan!', 'success');
+                }
+                tutupModalSoal();
+                loadAdminSoal(document.getElementById('admin-content'));
+            } catch(err) {
+                showToast('Gagal menyimpan soal: ' + err.message, 'error');
+            }
+        };
+
+        window.hapusSoal = async (id) => {
+            showCustomModal("Hapus Soal", "Apakah Anda yakin ingin menghapus soal ini dari database?", async () => {
+                try {
+                    await deleteDoc(doc(db, "soal", id));
+                    showToast('Soal berhasil dihapus', 'success');
+                    loadAdminSoal(document.getElementById('admin-content'));
+                } catch(err) {
+                    showToast('Gagal menghapus: ' + err.message, 'error');
+                }
+            });
+        };
+
+        renderView('login');
+
+        // PWA Service Worker via Blob
+        const swCode = `
+            self.addEventListener('install', (e) => self.skipWaiting());
+            self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+            self.addEventListener('fetch', (e) => {});
+        `;
+        const blob = new Blob([swCode], {type: 'application/javascript'});
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(err => console.log('SW Reg failed:', err));
+        }
+        
+        // Auto setup database 2 seconds after load
+        setTimeout(() => autoSetupDatabase(), 2000);
+    </script>
+</body>
+</html>
